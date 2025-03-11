@@ -2,6 +2,4 @@
 
 pico is a minimal text editor for linux systems.
 
-It is a project I made for fun following the guide at
-https://viewsourcecode.org/snaptoken/kilo.
-
+This is a project I made for fun to learn more about interacting with the terminal in C following the guide at https://viewsourcecode.org/snaptoken/kilo.
