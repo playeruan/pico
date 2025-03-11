@@ -33,7 +33,7 @@
 #define UNDERLINE_ESCAPE "\x1b[4m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define PICO_VERSION "1.0.1"
+#define PICO_VERSION "1.1.0"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -43,6 +43,8 @@
 #define TAB_STOP 2
 
 #define QUIT_TIMES 3
+
+typedef char bool;
 
 /*** data ***/
 
@@ -231,15 +233,15 @@ char getCharUnderCursor(){
 
 /*** syntax hightlighting ***/
 
-int is_separator(int c) {
+bool is_separator(int c) {
   return isspace(c) || c == '\0' || strchr("\",.()+-/*=~%<>[];", c) != NULL;
 }
 
-int is_string_brace(int c) {
+bool is_string_brace(int c) {
   return strchr("'\"", c) != NULL;
 }
 
-int is_brace(int c){
+bool is_brace(int c){
   return strchr("()[]{}<>", c) != NULL;
 }
 
@@ -247,28 +249,27 @@ void editorUpdateSyntax(erow *row) {
   row->hl = realloc(row->hl, row->rsize);
   memset(row->hl, HL_NORMAL, row->rsize);
 
-  int prev_is_sep = 1;
-  int prev_c = 0;
-  int in_string = 0;
+  bool prev_is_sep = 1;
   int last_string_brace = 0;
 
   int i = 0;
   while (i < row->rsize){
     char c = row->render[i];
-    unsigned char prev_hl = (i > 0) ? row->hl[i - 1] : HL_NORMAL;
-    
+    unsigned char prev_hl = (i > 0) ? row->hl[i - 1] : HL_NORMAL;   
 
     if (is_string_brace(c)){
       row->hl[i] = HL_STRING;
-      if (last_string_brace && last_string_brace == c && prev_c != '\\') {
-        in_string = 0;
+      if (last_string_brace && c == last_string_brace) {
         last_string_brace = 0;
-      } else {
-        in_string = 1;
-        last_string_brace = c;
+      } else if (last_string_brace == 0){
+        last_string_brace = c; 
       }
-    } else if (in_string) {
+    } else if (last_string_brace) {
       row->hl[i] = HL_STRING;
+      if (c == '\\' && i + 1 < row->rsize){
+          row->hl[i + 1] = HL_STRING;
+          i++;
+      }
     } else if (c == '*') {
       row->hl[i] = HL_STAR;
     } else if ((isdigit(c) && (prev_is_sep || prev_hl == HL_NUMBER)) ||
@@ -276,14 +277,12 @@ void editorUpdateSyntax(erow *row) {
       row->hl[i] = HL_NUMBER;
       i++;
       prev_is_sep = 0;
-      continue;
     } else if (is_brace(c)) {
       row->hl[i] = HL_BRACE; 
-    } 
-    
+    }
+  
     prev_is_sep = is_separator(c);
     i++;
-    prev_c = c;
   }
 }
 
@@ -471,7 +470,7 @@ void editorInsertNewLine() {
     editorUpdateRow(row);
   }
   config.cy++;
-  config.cx = 0; // CRASHA A \n SE 1, BEHAVIOUR SBAGLIATA CON 0
+  config.cx = 0; 
 
 }
 
