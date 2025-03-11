@@ -1,7 +1,7 @@
 dev:
-	@$(CC) micro.c -o micro -Wall -Wextra -pedantic -std=c99
-	@echo 'compiled micro'
+	@$(CC) pico.c -o pico -Wall -Wextra -pedantic -std=c99
+	@echo 'compiled pico'
 public:
-	@$(CC) micro.c -o micro -Wall -Wextra -pedantic -std=c99
-	sudo cp micro /bin/micro
-	@echo 'compiled micro_dev and copied to /bin/micro'
+	@$(CC) pico.c -o pico -Wall -Wextra -pedantic -std=c99
+	sudo cp pico /bin/pico
+	@echo 'compiled pico and copied to /bin/pico'

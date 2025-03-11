@@ -33,7 +33,7 @@
 #define UNDERLINE_ESCAPE "\x1b[4m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define MICRO_VERSION "1.0.0"
+#define PICO_VERSION "1.0.1"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -899,7 +899,6 @@ void editorProcessKeypress() {
       break;
 
     case CTRL_KEY('c'):
-      config.linestart = editorPrompt("Line char: %s", 1, NULL)[0];
       break;
 
     case ARROW_LEFT:
@@ -1001,7 +1000,7 @@ int main(int argc, char *argv[]){
     editorInsertRow(0, "", 0);
   }
 
-  editorSetStatusMessage("MICRO v" MICRO_VERSION);
+  editorSetStatusMessage("PICO v" PICO_VERSION);
 
   while (1) {
     editorRefreshScreen();
