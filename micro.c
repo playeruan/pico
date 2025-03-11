@@ -33,7 +33,7 @@
 #define UNDERLINE_ESCAPE "\x1b[4m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define MICRO_VERSION "0.9.3"
+#define MICRO_VERSION "1.0.0"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -870,8 +870,7 @@ void editorMoveCursor(int key) {
   }
   
   row = (config.cy >= config.numrows) ? NULL : &config.row[config.cy];
-  int rowlen = (row && row->size > 1) ? row->size : 0;
-  config.cx = MIN(config.cx, rowlen);
+  config.cx = MIN(config.cx, row->size);
 }
 
 void editorProcessKeypress() {
@@ -998,6 +997,8 @@ int main(int argc, char *argv[]){
 
   if (argc >= 2) {
     editorOpen(argv[1]);
+  } else {
+    editorInsertRow(0, "", 0);
   }
 
   editorSetStatusMessage("MICRO v" MICRO_VERSION);
