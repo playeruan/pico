@@ -102,6 +102,7 @@ void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
 char *editorPrompt(char *prompt, size_t maxlen, void (*callback)(char*, int));
 char getCloseBrace(char c);
+void editorScroll();
 
 /*** terminal ***/
 
@@ -470,8 +471,7 @@ void editorInsertNewLine() {
     editorUpdateRow(row);
   }
   config.cy++;
-  config.cx = 0; 
-
+  config.cx = 0;
 }
 
 /*** file i/o ***/
