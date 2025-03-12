@@ -1,4 +1,5 @@
 /*
+* reference:
 * https://viewsourcecode.org/snaptoken/kilo
 */
 
@@ -31,9 +32,10 @@
 #define RESET_ESCAPE "\x1b[m"
 #define BOLD_ESCAPE "\x1b[1m"
 #define UNDERLINE_ESCAPE "\x1b[4m"
+#define ITALIC_ESCAPE "\x1b[3m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define PICO_VERSION "1.2.0"
+#define PICO_VERSION "1.2.1"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -95,6 +97,7 @@ enum EditorHighlight {
   HL_STAR,
   HL_STRING,
   HL_MATCH,
+  HL_ESCAPE,
 };
 
 /*** prototypes ***/
@@ -252,6 +255,7 @@ void editorUpdateSyntax(erow *row) {
 
   bool prev_is_sep = 1;
   int last_string_brace = 0;
+  int prev_c = 0;
 
   int i = 0;
   while (i < row->rsize){
@@ -267,22 +271,25 @@ void editorUpdateSyntax(erow *row) {
       }
     } else if (last_string_brace) {
       row->hl[i] = HL_STRING;
-      if (c == '\\' && i + 1 < row->rsize){
-          row->hl[i + 1] = HL_STRING;
+      if ((c == '\\' || c == '%') && i + 1 < row->rsize){
+          row->hl[i] = HL_ESCAPE;
+          row->hl[i + 1] = HL_ESCAPE;
           i++;
       }
+    } else if ((isdigit(c) && (prev_is_sep || prev_hl == HL_NUMBER))
+        || (c == '.' && prev_hl == HL_NUMBER)
+        || (isxdigit(c) && prev_hl == HL_NUMBER)
+        || (prev_c == '0' && prev_hl == HL_NUMBER && c == 'x')) {
+      row->hl[i] = HL_NUMBER;
+      prev_is_sep = 0;
     } else if (c == '*') {
       row->hl[i] = HL_STAR;
-    } else if ((isdigit(c) && (prev_is_sep || prev_hl == HL_NUMBER)) ||
-        (c == '.' && prev_hl == HL_NUMBER)) {
-      row->hl[i] = HL_NUMBER;
-      i++;
-      prev_is_sep = 0;
     } else if (is_brace(c)) {
       row->hl[i] = HL_BRACE; 
     }
   
     prev_is_sep = is_separator(c);
+    prev_c = c;
     i++;
   }
 }
@@ -290,6 +297,7 @@ void editorUpdateSyntax(erow *row) {
 int editorSyntaxToColor(int hl){
   switch (hl) {
     case HL_NUMBER: return 31;
+    case HL_ESCAPE: 
     case HL_STRING: return 32;
     case HL_BRACE : return 33;
     case HL_MATCH : return 34;
@@ -705,12 +713,18 @@ void editorDrawRows(struct abuf *ab) {
             abAppend(ab, &c[i], 1);
           } else {
             int color = editorSyntaxToColor(hl[i]);
+            if (hl[i] == HL_ESCAPE) {
+                abAppend(ab, ITALIC_ESCAPE, 4);
+            } else if (hl[i - 1] == HL_ESCAPE) {
+                abAppend(ab, RESET_ESCAPE, 3);
+                current_color = 0; // reset so string maintains color
+            }
             if (color != current_color) {
               current_color = color; 
               char buf[16];
-              int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
+              int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color); 
               abAppend(ab, buf, clen);
-            }
+            } 
             abAppend(ab, &c[i], 1);
           }
         }
@@ -898,6 +912,7 @@ void editorProcessKeypress() {
       promptbuffer = editorPrompt("go to line: %s", 16, NULL);
       config.cy = promptbuffer ? atoi(promptbuffer) - 1 : config.cy;
       config.cy = MIN(config.cy, config.numrows - 1);
+			config.cy = MAX(config.cy, 0);
       config.cx = MIN(config.cx, config.row[config.cy].size);
       break;
 
@@ -942,13 +957,16 @@ void editorProcessKeypress() {
       editorDelChar();
       break;
 
+    case CTRL_KEY('c'):
     case CTRL_KEY('l'):
     case '\x1b':
       break;
 
     case CTRL_KEY('d'):
       editorDelRow(config.cy);
-      config.cx = 0;
+      config.cy--;
+      config.cy = MAX(config.cy, 0);
+      config.cx = config.row[config.cy].size;
       break;
 
     case CTRL_KEY('f'):
@@ -959,8 +977,16 @@ void editorProcessKeypress() {
       editorInsertChar(c);
       
       if (isCharOpen(c)){
-        editorInsertChar(getCloseBrace(c));
-        config.cx--;
+          editorInsertChar(getCloseBrace(c));
+          config.cx--;
+      } 
+      if (c == getCloseBrace(config.row[config.cy].chars[config.cx - 2])){
+          editorDelChar();
+          config.cx++;
+          if (c == getCloseBrace(c)){
+            editorDelChar();
+            config.cx++;
+          }
       }
 
       break;
