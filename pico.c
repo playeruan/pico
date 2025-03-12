@@ -323,7 +323,7 @@ int editorRowRxToCx(erow *row, int rx) {
 }
 
 int isCharOpen(int c){
-  return (c == '(' || c == '[' || c == '{' || c == '"');
+  return (strchr("([{<\"'", c) != NULL);
 }
 
 char getCloseBrace(char c){
