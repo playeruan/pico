@@ -33,7 +33,7 @@
 #define UNDERLINE_ESCAPE "\x1b[4m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define PICO_VERSION "1.1.0"
+#define PICO_VERSION "1.2.0"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -663,12 +663,12 @@ void editorScroll() {
   if (config.cy < config.numrows) {
     config.rx = editorRowCxToRx(&config.row[config.cy], config.cx);
   }
-
   if (config.cy < config.rowoff + SCROLL_PADDING) {
     config.rowoff = config.cy - SCROLL_PADDING;
     config.rowoff = MAX(config.rowoff, 0);
   }
-  if (config.cy >= config.rowoff + config.screenrows - SCROLL_PADDING) {
+  if (config.cy >= config.rowoff + config.screenrows - SCROLL_PADDING
+      && config.numrows > config.screenrows) {
     config.rowoff = config.cy - config.screenrows + 1 + SCROLL_PADDING;
     config.rowoff = MIN(config.rowoff, config.numrows - config.screenrows);
   }
@@ -875,6 +875,7 @@ void editorMoveCursor(int key) {
 void editorProcessKeypress() {
   int c = editorReadKey();
   char delc;
+  char* promptbuffer;
   static int quit_times = QUIT_TIMES; 
 
   switch (c) {
@@ -893,11 +894,15 @@ void editorProcessKeypress() {
       write(STDOUT_FILENO, RESET_MOUSE_POS_STRING, 3);
       exit(0);
 
-    case CTRL_KEY('s'):
-      editorSave();
+    case CTRL_KEY('g'):
+      promptbuffer = editorPrompt("go to line: %s", 16, NULL);
+      config.cy = promptbuffer ? atoi(promptbuffer) - 1 : config.cy;
+      config.cy = MIN(config.cy, config.numrows - 1);
+      config.cx = MIN(config.cx, config.row[config.cy].size);
       break;
 
-    case CTRL_KEY('c'):
+    case CTRL_KEY('s'):
+      editorSave();
       break;
 
     case ARROW_LEFT:
