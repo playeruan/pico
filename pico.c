@@ -35,7 +35,7 @@
 #define ITALIC_ESCAPE "\x1b[3m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define PICO_VERSION "1.2.1"
+#define PICO_VERSION "1.3.0"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
