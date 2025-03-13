@@ -920,6 +920,8 @@ void editorProcessInsertMode(int c) {
     case KEY_END:
     case KEY_PAGE_UP:
     case KEY_PAGE_DOWN:
+    case CTRL_KEY('q'):
+    case CTRL_KEY('s'):
       break;
 
     case '\r':
@@ -963,7 +965,8 @@ void editorProcessInsertMode(int c) {
         editorInsertChar(getCloseBrace(c));
         config.cx--;
       } 
-      if (c == getCloseBrace(config.row[config.cy].chars[config.cx - 2])){
+      if (c == getCloseBrace(config.row[config.cy].chars[config.cx - 2])
+          && c != ' '){
         editorDelChar();
         config.cx++;
         if (c == getCloseBrace(c)){
