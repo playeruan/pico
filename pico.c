@@ -58,6 +58,11 @@ typedef struct erow {
   unsigned char *hl;
 } erow;
 
+typedef enum EditorMode {
+  MODE_NORMAL,
+  MODE_INSERT
+} EditorMode;
+
 struct editorConfig {
   int cx, cy;
   int rx; // x counting multi-column characters
@@ -70,6 +75,7 @@ struct editorConfig {
   unsigned int dirty;
   char linestart;
   char *filename;
+  EditorMode mode;
   char statusmsg[80];
   time_t statusmsg_time;
   struct termios orig_termios;
@@ -299,6 +305,30 @@ void editorUpdateSyntax(erow *row) {
   }
 }
 
+int isCharOpen(int c){
+  return (strchr("([{<\"'", c) != NULL);
+}
+
+char getCloseBrace(char c){
+  switch (c){
+    case '(' : return ')' ;
+    case '[' : return ']' ;
+    case '{' : return '}' ;
+    case '"' : return '"' ; 
+    case '\'': return '\'';
+    case '<' : return '>' ;
+    default  : return ' ' ;
+  }
+}
+
+char* getModeName(EditorMode mode) {
+  switch (mode){
+    case MODE_NORMAL: return "NORMAL";
+    case MODE_INSERT: return "INSERT";
+  }
+  return "";
+}
+
 int editorSyntaxToColor(int hl){
   switch (hl) {
     case HL_NUMBER: return 31;
@@ -333,22 +363,6 @@ int editorRowRxToCx(erow *row, int rx) {
     if (cur_rx > rx) return cx;
   }
   return cx;
-}
-
-int isCharOpen(int c){
-  return (strchr("([{<\"'", c) != NULL);
-}
-
-char getCloseBrace(char c){
-  switch (c){
-    case '(' : return ')' ;
-    case '[' : return ']' ;
-    case '{' : return '}' ;
-    case '"' : return '"' ; 
-    case '\'': return '\'';
-    case '<' : return '>' ;
-    default  : return ' ' ;
-  }
 }
 
 void editorUpdateRow(erow *row) {
@@ -746,9 +760,10 @@ void editorDrawStatusBar(struct abuf *ab) {
   abAppend(ab, INVERT_ESCAPE, 4);
   char status[80], rstatus[80];
   
-  int len = snprintf(status, sizeof(status), " %.20s%s - %d lines", 
+  int len = snprintf(status, sizeof(status), " %.20s%s - %d lines | %s", 
       config.filename ? config.filename : "<unnamed>", 
-      config.dirty ? "*" : "", config.numrows);
+      config.dirty ? "*" : "", config.numrows,
+      getModeName(config.mode));
   int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d ",
       config.cx, config.cy + 1);
 
@@ -891,18 +906,129 @@ void editorMoveCursor(int key) {
   config.cx = MIN(config.cx, row->size);
 }
 
-void editorProcessKeypress() {
-  int c = editorReadKey();
-  char delc;
-  char* promptbuffer;
-  static int quit_times = QUIT_TIMES; 
+void editorProcessInsertMode(int c) {
 
+  char delc;
+  
   switch (c) {
-    
+
+    case ARROW_DOWN:
+    case ARROW_UP:
+    case ARROW_LEFT:
+    case ARROW_RIGHT:
+    case KEY_HOME:
+    case KEY_END:
+    case KEY_PAGE_UP:
+    case KEY_PAGE_DOWN:
+      break;
+
     case '\r':
       editorInsertNewLine();
       break;
 
+    case BACKSPACE:
+    case CTRL_KEY('h'):
+      if (
+        isCharOpen(delc = editorDelChar()) 
+        && getCharUnderCursor() == getCloseBrace(delc)
+      ){
+        config.cx++;
+        editorDelChar();
+      }
+      break;
+    case KEY_DEL:
+      config.cx++;
+      editorDelChar();
+      break;
+
+    case CTRL_KEY('c'):
+    case CTRL_KEY('l'):
+      break;
+
+    case CTRL_KEY('d'):
+      editorDelRow(config.cy);
+      config.cy--;
+      config.cy = MAX(config.cy, 0);
+      config.cx = config.row[config.cy].size;
+      break;
+
+    case '\x1b':
+      config.mode = MODE_NORMAL;
+      break;
+
+    default:
+      editorInsertChar(c);
+
+      if (isCharOpen(c)){
+        editorInsertChar(getCloseBrace(c));
+        config.cx--;
+      } 
+      if (c == getCloseBrace(config.row[config.cy].chars[config.cx - 2])){
+        editorDelChar();
+        config.cx++;
+        if (c == getCloseBrace(c)){
+          editorDelChar();
+          config.cx++;
+        }
+      }
+      break;
+  }
+}
+
+void editorProcessNormal(int c) {
+  switch (c) {
+
+    case 'i':
+      config.mode = MODE_INSERT;
+      break;
+
+    case ';':
+      config.cx = config.row[config.cy].size;
+      config.mode = MODE_INSERT;
+      if (config.row[config.cy].chars[config.cx - 1] != ';'){
+        editorInsertChar(';');
+      }
+      break;
+
+    case 'a': 
+      config.cx = MAX(config.row[config.cy].rsize, 1);
+      config.mode = MODE_INSERT;
+      break;
+
+    case 'h':
+      editorMoveCursor(ARROW_LEFT);
+      break;
+    case 'l':
+      editorMoveCursor(ARROW_RIGHT);
+      break;
+    case 'j':
+      editorMoveCursor(ARROW_DOWN);
+      break;
+    case 'k':
+      editorMoveCursor(ARROW_UP);
+      break;
+
+    case 's':
+    case '/':
+      editorSearch();
+      break;
+
+    case '0':
+      config.cy = 0;
+      config.cx = 0;
+      break;
+    case 'G':
+      config.cy = config.numrows - 1;
+      config.cx = 0;
+      break;
+  }
+}
+
+void editorProcessCommon(int c) {
+  static int quit_times = QUIT_TIMES; 
+
+  char* promptbuffer; switch (c) {
+    
     case CTRL_KEY('q'):
       if (config.dirty && --quit_times > 0) {
         editorSetStatusMessage("WARNING! File has unsaved changes. "
@@ -917,7 +1043,7 @@ void editorProcessKeypress() {
       promptbuffer = editorPrompt("go to line: %s", 16, NULL);
       config.cy = promptbuffer ? atoi(promptbuffer) - 1 : config.cy;
       config.cy = MIN(config.cy, config.numrows - 1);
-			config.cy = MAX(config.cy, 0);
+      config.cy = MAX(config.cy, 0);
       config.cx = MIN(config.cx, config.row[config.cy].size);
       break;
 
@@ -947,58 +1073,25 @@ void editorProcessKeypress() {
       config.cx = MAX(config.row[config.cy].rsize, 1);
       break;
 
-    case BACKSPACE:
-    case CTRL_KEY('h'):
-      if (
-        isCharOpen(delc = editorDelChar()) 
-        && getCharUnderCursor() == getCloseBrace(delc)
-      ){
-        config.cx++;
-        editorDelChar();
-      }
-      break;
-    case KEY_DEL:
-      config.cx++;
-      editorDelChar();
-      break;
-
-    case CTRL_KEY('c'):
-    case CTRL_KEY('l'):
-    case '\x1b':
-      break;
-
-    case CTRL_KEY('d'):
-      editorDelRow(config.cy);
-      config.cy--;
-      config.cy = MAX(config.cy, 0);
-      config.cx = config.row[config.cy].size;
-      break;
-
-    case CTRL_KEY('f'):
-      editorSearch();
-      break;
-
-    default:
-      editorInsertChar(c);
-      
-      if (isCharOpen(c)){
-          editorInsertChar(getCloseBrace(c));
-          config.cx--;
-      } 
-      if (c == getCloseBrace(config.row[config.cy].chars[config.cx - 2])){
-          editorDelChar();
-          config.cx++;
-          if (c == getCloseBrace(c)){
-            editorDelChar();
-            config.cx++;
-          }
-      }
-
-      break;
   }
-
+  
   quit_times = QUIT_TIMES;
 
+}
+
+void editorProcessKeypress() {
+  int c = editorReadKey();
+  
+  editorProcessCommon(c);
+
+  switch (config.mode){
+    case MODE_NORMAL:
+      editorProcessNormal(c);
+      break;
+    case MODE_INSERT:
+      editorProcessInsertMode(c); 
+      break;
+  }
 }
 
 /*** init ***/
@@ -1016,6 +1109,7 @@ void initEditor() {
   config.statusmsg_time = 0;
   config.dirty = 0;
   config.linestart = '|';
+  config.mode = MODE_NORMAL;
 
   if (getWindowSize(&config.screenrows, &config.screencols) == -1)
     die("getWindowSize");
