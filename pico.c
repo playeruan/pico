@@ -35,7 +35,7 @@
 #define ITALIC_ESCAPE "\x1b[3m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define PICO_VERSION "1.3.0"
+#define PICO_VERSION "1.3.1"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -43,6 +43,7 @@
 
 #define SCROLL_PADDING 4
 #define TAB_STOP 2
+#define CURSOR_OFFSET 6
 
 #define QUIT_TIMES 3
 
@@ -709,11 +710,26 @@ void editorScroll() {
 
 void editorDrawRows(struct abuf *ab) {
   int y;
+  char* filenumbuf = malloc(16);
+  int filerow;
   for (y = 0; y < config.screenrows; y++) {
-    int filerow = y + config.rowoff;
+    filerow = y + config.rowoff;
 
-    abAppend(ab, &config.linestart, 1);
+    sprintf(filenumbuf, "%5d", filerow + 1);
+
+    abAppend(ab, "\x1b[40m", 5);
+    if (filerow == config.cy){
+      abAppend(ab, "\x1b[33m", 5);
+      abAppend(ab, filenumbuf, 5);
+      abAppend(ab, &config.linestart, 1);
+      abAppend(ab, "\x1b[39m", 5);
+    } else {
+      abAppend(ab, filenumbuf, 5);
+      abAppend(ab, &config.linestart, 1);
+    }
+    abAppend(ab, "\x1b[49m", 5);
     
+
     if (filerow < config.numrows) {
       int len = config.row[filerow].rsize - config.coloff;
       len = MAX(len, 0);
@@ -754,6 +770,7 @@ void editorDrawRows(struct abuf *ab) {
     abAppend(ab, CLEAR_LINE_STRING, 3);
     abAppend(ab, "\r\n", 2);
   }
+  free(filenumbuf);
 }
 
 void editorDrawStatusBar(struct abuf *ab) {
@@ -812,7 +829,7 @@ void editorRefreshScreen() {
 
   char buf[32];
   snprintf(buf,sizeof(buf),"\x1b[%d;%dH",
-           (config.cy - config.rowoff)+1, (config.rx - config.coloff)+1);
+  (config.cy - config.rowoff)+1, (config.rx - config.coloff)+CURSOR_OFFSET);
 
   abAppend(&ab, buf, strlen(buf));
 
@@ -945,19 +962,10 @@ void editorProcessInsertMode(int c) {
 
     case CTRL_KEY('c'):
     case CTRL_KEY('l'):
-      break;
-
     case CTRL_KEY('d'):
-      editorDelRow(config.cy);
-      config.cy--;
-      config.cy = MAX(config.cy, 0);
-      config.cx = config.row[config.cy].size;
-      break;
+      break; 
 
-    case '\x1b':
-      config.mode = MODE_NORMAL;
-      break;
-
+    
     default:
       editorInsertChar(c);
 
@@ -978,7 +986,7 @@ void editorProcessInsertMode(int c) {
   }
 }
 
-void editorProcessNormal(int c) {
+void editorProcessNormalMode(int c) {
   switch (c) {
 
     case 'i':
@@ -992,9 +1000,10 @@ void editorProcessNormal(int c) {
         editorInsertChar(';');
       }
       break;
-
-    case 'a': 
-      config.cx = MAX(config.row[config.cy].rsize, 1);
+ 
+    case 'a':
+		case 'A':
+      config.cx = MAX(config.row[config.cy].size, 0);
       config.mode = MODE_INSERT;
       break;
 
@@ -1017,7 +1026,6 @@ void editorProcessNormal(int c) {
       break;
 
     case '0':
-      config.cy = 0;
       config.cx = 0;
       break;
     case 'G':
@@ -1075,6 +1083,17 @@ void editorProcessCommon(int c) {
     case CTRL_KEY('a'):
       config.cx = MAX(config.row[config.cy].rsize, 1);
       break;
+    
+    case CTRL_KEY('d'):
+      editorDelRow(config.cy);
+      config.cy--;
+      config.cy = MAX(config.cy, 0);
+      config.cx = config.row[config.cy].size;
+      break;
+
+    case '\x1b':
+      config.mode = MODE_NORMAL;
+      break;
 
   }
   
@@ -1089,7 +1108,7 @@ void editorProcessKeypress() {
 
   switch (config.mode){
     case MODE_NORMAL:
-      editorProcessNormal(c);
+      editorProcessNormalMode(c);
       break;
     case MODE_INSERT:
       editorProcessInsertMode(c); 
