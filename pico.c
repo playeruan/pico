@@ -272,14 +272,19 @@ void editorUpdateSyntax(erow *row) {
     } else if (last_string_brace) {
       row->hl[i] = HL_STRING;
       if ((c == '\\' || c == '%') && i + 1 < row->rsize){
-          row->hl[i] = HL_ESCAPE;
+        row->hl[i] = HL_ESCAPE;
+        i++;
+        row->hl[i] = HL_ESCAPE;
+        if (c == '\\' && row->render[i] == 'x') {
           row->hl[i + 1] = HL_ESCAPE;
-          i++;
+          row->hl[i + 2] = HL_ESCAPE;
+          i+=2;
+        }
       }
     } else if ((isdigit(c) && (prev_is_sep || prev_hl == HL_NUMBER))
-        || (c == '.' && prev_hl == HL_NUMBER)
-        || (isxdigit(c) && prev_hl == HL_NUMBER)
-        || (prev_c == '0' && prev_hl == HL_NUMBER && c == 'x')) {
+      || (c == '.' && prev_hl == HL_NUMBER)
+      || (isxdigit(c) && prev_hl == HL_NUMBER)
+      || (prev_c == '0' && prev_hl == HL_NUMBER && c == 'x')) {
       row->hl[i] = HL_NUMBER;
       prev_is_sep = 0;
     } else if (c == '*') {
