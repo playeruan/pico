@@ -3,5 +3,5 @@ here:
 	@echo built pico in build/pico
 
 install:	
-	@$(CC) pico.c -o $(HOME)/bin/pico -Wall -Wextra -pedantic -std=c99
-	@echo built pico in $(HOME)/bin/pico
+	@$(CC) pico.c -o /usr/bin/pico -Wall -Wextra -pedantic -std=c99
+	@echo built pico in /usr/bin/pico

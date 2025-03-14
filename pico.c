@@ -35,7 +35,7 @@
 #define ITALIC_ESCAPE "\x1b[3m"
 #define INVERT_ESCAPE "\x1b[7m"
 
-#define PICO_VERSION "1.3.1"
+#define PICO_VERSION "1.3.2"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define MIN(a, b) a < b ? a : b
@@ -66,7 +66,7 @@ typedef enum EditorMode {
 
 struct editorConfig {
   int cx, cy;
-  int rx; // x counting multi-column characters
+  int rx;       // x counting multi-column characters
   int rowoff;
   int coloff;
   int screenrows;
@@ -76,6 +76,10 @@ struct editorConfig {
   unsigned int dirty;
   char linestart;
   char *filename;
+  /* for future:
+   * char *clipboard;
+   * int clipboard_len;
+   */
   EditorMode mode;
   char statusmsg[80];
   time_t statusmsg_time;
@@ -468,6 +472,12 @@ void editorInsertChar(int c) {
   editorRowInsertChar(&config.row[config.cy], config.cx++, c);
 }
 
+void editorInsertString(char* str, int len) {
+  for (int i = 0; i < len; i++){
+    editorInsertChar(str[i]);
+  }
+}
+
 char editorDelChar() {
   
   if (config.cy == config.numrows) return 0;
@@ -726,8 +736,8 @@ void editorDrawRows(struct abuf *ab) {
     } else {
       abAppend(ab, filenumbuf, 5);
       abAppend(ab, &config.linestart, 1);
+      abAppend(ab, "\x1b[49m", 5);
     }
-    abAppend(ab, "\x1b[49m", 5);
     
 
     if (filerow < config.numrows) {
@@ -964,9 +974,11 @@ void editorProcessInsertMode(int c) {
     case CTRL_KEY('l'):
     case CTRL_KEY('d'):
       break; 
-
     
     default:
+
+      if (iscntrl(c)) break;
+
       editorInsertChar(c);
 
       if (isCharOpen(c)){
@@ -987,6 +999,9 @@ void editorProcessInsertMode(int c) {
 }
 
 void editorProcessNormalMode(int c) {
+
+  char* promptbuffer;
+  
   switch (c) {
 
     case 'i':
@@ -1000,7 +1015,12 @@ void editorProcessNormalMode(int c) {
         editorInsertChar(';');
       }
       break;
- 
+
+		case 'o':
+			config.cx = config.row[config.cy].size;
+			editorInsertNewLine();
+			break;
+
     case 'a':
 		case 'A':
       config.cx = MAX(config.row[config.cy].size, 0);
@@ -1025,6 +1045,14 @@ void editorProcessNormalMode(int c) {
       editorSearch();
       break;
 
+    case 'g':
+      promptbuffer = editorPrompt("go to line: %s", 16, NULL);
+      config.cy = promptbuffer ? atoi(promptbuffer) - 1 : config.cy;
+      config.cy = MIN(config.cy, config.numrows - 1);
+      config.cy = MAX(config.cy, 0);
+      config.cx = MIN(config.cx, config.row[config.cy].size);
+      break;
+
     case '0':
       config.cx = 0;
       break;
@@ -1038,7 +1066,9 @@ void editorProcessNormalMode(int c) {
 void editorProcessCommon(int c) {
   static int quit_times = QUIT_TIMES; 
 
-  char* promptbuffer; switch (c) {
+  //char* promptbuffer; 
+
+  switch (c) {
     
     case CTRL_KEY('q'):
       if (config.dirty && --quit_times > 0) {
@@ -1049,14 +1079,6 @@ void editorProcessCommon(int c) {
       write(STDOUT_FILENO, CLEAR_SCREEN_STRING, 4);
       write(STDOUT_FILENO, RESET_MOUSE_POS_STRING, 3);
       exit(0);
-
-    case CTRL_KEY('g'):
-      promptbuffer = editorPrompt("go to line: %s", 16, NULL);
-      config.cy = promptbuffer ? atoi(promptbuffer) - 1 : config.cy;
-      config.cy = MIN(config.cy, config.numrows - 1);
-      config.cy = MAX(config.cy, 0);
-      config.cx = MIN(config.cx, config.row[config.cy].size);
-      break;
 
     case CTRL_KEY('s'):
       editorSave();
@@ -1080,8 +1102,7 @@ void editorProcessCommon(int c) {
       config.cx = 0;
       break;
     case KEY_END:
-    case CTRL_KEY('a'):
-      config.cx = MAX(config.row[config.cy].rsize, 1);
+      config.cx = MAX(config.row[config.cy].rsize, 0);
       break;
     
     case CTRL_KEY('d'):
