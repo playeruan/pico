@@ -23,6 +23,8 @@ This is a project I made for fun to learn more about interacting with the termin
 - G    -> go to end of file
 - s, / -> search
 - i    -> switch to **insert mode**
-- a, A -> go to end of line and switch to **insert mode**
+- a    -> switch to **insert mode** to the right of the cursor
+- A    -> go to end of line and switch to **insert mode**
 - ;    -> go to end of line, insert ";" if not present and switch to **insert mode**
 - o    -> insert new line below and switch to **insert mode**
+- O    -> insert new line above and switch to **insert mode**
