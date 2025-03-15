@@ -1004,11 +1004,16 @@ void editorProcessNormalMode(int16_t c) {
 
   char* promptbuffer;
   
+  if (iscntrl(c)) return;
+
   switch (c) {
 
     case 'i':
     case 'a':
-      if (c == 'a') config.cx++;
+      if (c == 'a') {
+        config.cx++;
+        config.cx = MIN(config.cx, config.row[config.cy].size);
+      }
       config.mode = MODE_INSERT;
       break;
 
@@ -1029,6 +1034,7 @@ void editorProcessNormalMode(int16_t c) {
     case 'O':
       config.cx = 0;
 			editorInsertNewLine();
+      config.cy--;
       config.mode = MODE_INSERT;
 			break;
 
